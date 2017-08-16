@@ -1,0 +1,29 @@
+{
+  "name": "@isfco/craft",
+  "version": "0.1.0",
+  "description": "A command line tool for creating React apps from template.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cebroker/craft.git"
+  },
+  "keywords": [
+    "CLI",
+    "react",
+    "create-react-app",
+    "template"
+  ],
+  "author": "@fcaldera",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cebroker/craft/issues"
+  },
+  "homepage": "https://github.com/cebroker/craft#readme",
+  "dependencies": {
+    "chalk": "^2.1.0",
+    "commander": "^2.11.0"
+  }
+}

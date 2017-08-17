@@ -49,15 +49,62 @@ if (!isCRAInstalled()) {
 
 createApp(projectName).then(() => {
   console.log();
-  // Clone template repositoty to a temporary directory
-  return cloneTemplate(projectTemplate).then(obj => obj);
+
+  // Clone template to a temp directory
+  return getTemporaryDirectory()
+    .then((obj) => {
+      return new Promise((resolve, reject) => {
+        const command = 'git';
+        const args = ['clone', projectTemplate, obj.tmpdir];
+        const child = spawn(command, args, { stdio: 'inherit' });
+
+        child.on('close', code => {
+          if (code !== 0) {
+            reject({
+              command: `${command} ${args.join(' ')}`,
+            });
+          }
+          resolve(obj);
+        });
+      })
+    });
 }).then((obj) => {
-  console.log();
+  console.log(); 
   console.log('Applying custom template...');
 
+  const root = path.resolve(projectName);
+
+  const originalDirectory = process.cwd();
+  process.chdir(root);
+
+  // Get dependencies to install
+  const templatePackageJsonPath = path.resolve(obj.tmpdir, 'package.json');
+  const templatePackageJson = require(templatePackageJsonPath);
+  let templateDependencies = templatePackageJson.dependencies;
+
+  // Does not include already installed dependencies
+  // TODO: installed dependencies should be taken from package.json of just created app
+  const installedDependencies = ["react", "react-dom", "react-scripts"];
+
+  installedDependencies.forEach(key => {
+    delete templateDependencies[key];
+  });
+
+  // Install additional dependencies
+  return install(templateDependencies).then(() => {
+    // Merge package.json props
+    let packageJson = require(path.join(root,'package.json'));
+    console.log(packageJson);
+
+    obj.cleanup();
+  });
+
+  
+  // Merge folders
+  
 
 
-  obj.cleanup();
+  
 
 }).catch(reason => {
   console.log();
@@ -70,27 +117,6 @@ createApp(projectName).then(() => {
   }
   console.log();
 });
-
-function cloneTemplate(template) {
-
-  return getTemporaryDirectory()
-    .then((obj) => {
-      return new Promise((resolve, reject) => {
-        const command = 'git';
-        const args = ['clone', template, obj.tmpdir];
-        const child = spawn(command, args, { stdio: 'inherit' });
-  
-        child.on('close', code => {
-          if (code !== 0) {
-            reject({
-              command: `${command} ${args.join(' ')}`,
-            });
-          }
-          resolve(obj);
-        });
-      })
-    });
-}
 
 function createApp(name) {
   return new Promise((resolve, reject) => {
@@ -140,6 +166,36 @@ function getTemporaryDirectory() {
         });
       }
     });
+  });
+}
+
+function install(dependencies) {
+  return new Promise((resolve, reject) => {
+
+    let args = [
+      'install',
+      '--save',
+      //'--save-exact',
+      '--loglevel',
+      'error',
+    ];
+
+    args = args.concat(
+      Object.keys(dependencies).map(key => {
+        return `${key}@${dependencies[key]}`;
+      })
+    );
+    
+    // const child = spawn('npm', args, { stdio: 'inherit' });
+    // child.on('close', code => {
+    //   if (code !== 0) {
+    //     reject({
+    //       command: `${command} ${args.join(' ')}`,
+    //     });
+    //     return;
+    //   }
+       resolve();
+    // });
   });
 }
 

@@ -89,7 +89,7 @@ createApp(projectName)
   })
   .then(obj => {
     console.log();
-    console.log('Installing template packages. This might take a couple of minutes.');
+    console.log('Installing template packages...');
 
     const root = path.resolve(projectName);
     const originalDirectory = process.cwd();
@@ -146,6 +146,9 @@ createApp(projectName)
   })
   .then(obj => {
     // Merge folders and files
+    console.log();
+    console.log('Copying files...');
+
     const files = fs.readdirSync(obj.tmpdir);
     const skips = ['node_modules', 'package.json', 'package-lock.json', '.git'];
     let promises = [];

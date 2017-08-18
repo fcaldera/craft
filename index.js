@@ -2,7 +2,7 @@
 'use strict';
 
 const program = require('commander');
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
 const spawn = require('cross-spawn');
@@ -79,11 +79,19 @@ createApp(projectName).then(() => {
 
   // Get dependencies to install
   const templatePackageJsonPath = path.resolve(obj.tmpdir, 'package.json');
-  const templatePackageJson = require(templatePackageJsonPath);
-  let templateDependencies = templatePackageJson.dependencies;
+  let templatePackageJson;
+
+  try {
+    templatePackageJson = require(templatePackageJsonPath);
+  } catch(error) {
+    return Promise.resolve(obj);
+  }
+
+  let templateDependencies = templatePackageJson.dependencies || {};
 
   // Does not include already installed dependencies
-  // TODO: installed dependencies should be taken from package.json of just created app
+  // TODO: installed dependencies should be taken from package.json of just 
+  // created app
   const installedDependencies = ["react", "react-dom", "react-scripts"];
 
   installedDependencies.forEach(key => {
@@ -92,19 +100,39 @@ createApp(projectName).then(() => {
 
   // Install additional dependencies
   return install(templateDependencies).then(() => {
-    // Merge package.json props
-    let packageJson = require(path.join(root,'package.json'));
-    console.log(packageJson);
 
-    obj.cleanup();
+    const appPackageJson = require(path.join(root,'package.json'));
+    
+    // Dependencies are already available in app package.json so we can safely
+    // replace them. However we cannot replace template scripts with app 
+    // scripts since the template could contains scripts customization
+    const scripts = Object.assign({}, appPackageJson.scripts, templatePackageJson.scripts);
+    const packageJson = Object.assign({}, templatePackageJson, appPackageJson, { scripts });
+    
+    fs.writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify(packageJson, null, 2)
+    );
+
+    return Object.assign({}, obj, { root });
+
   });
 
-  
-  // Merge folders
-  
+}).then((obj) => {
+  // Merge folders and files
+  // skip: node_modules, package.json, package-lock.json
 
+  const files = fs.readdirSync(obj.tmpdir);
+  const skips = ['node_modules', 'package.json', 'package-lock.json', '.git'];
 
-  
+  for (const file of files) {
+    if (skips.includes(file)) { continue; }
+    const src = path.join(obj.tmpdir, file);
+    const dest = path.join(obj.root, file);
+    fs.copySync(src, dest); 
+  }
+
+  obj.cleanup();
 
 }).catch(reason => {
   console.log();
@@ -197,5 +225,36 @@ function install(dependencies) {
        resolve();
     // });
   });
+}
+
+function mergeDirs (src, dest) {
+
+  const files = fs.readdirSync(src)
+
+  files.forEach((file) => {
+    const srcFile = '' + src + '/' + file
+    const destFile = '' + dest + '/' + file
+    const stats = fs.lstatSync(srcFile)
+
+    if (stats.isDirectory()) {
+      mergeDirs(srcFile, destFile, conflictResolver)
+    } else {
+      // console.log({srcFile, destFile}, 'conflict?', fs.existsSync(destFile))
+      if (!fs.existsSync(destFile)) {
+        copyFile(destFile, srcFile)
+      } else {
+        switch (conflictResolver) {
+          case conflictResolvers.ask:
+            fileAsk(srcFile, destFile)
+            break
+          case conflictResolvers.overwrite:
+            copyFile(destFile, srcFile)
+            break
+          case conflictResolvers.skip:
+            console.log(`${destFile} exists, skipping...`)
+        }
+      }
+    }
+  })
 }
 

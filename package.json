@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "description": "A command line tool for creating React apps from template.",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cebroker/craft.git"
@@ -18,6 +15,9 @@
   ],
   "author": "@fcaldera",
   "license": "ISC",
+  "bin": {
+    "craft": "./index.js"
+  },
   "bugs": {
     "url": "https://github.com/cebroker/craft/issues"
   },

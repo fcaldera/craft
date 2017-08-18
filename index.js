@@ -120,20 +120,32 @@ createApp(projectName).then(() => {
 
 }).then((obj) => {
   // Merge folders and files
-  // skip: node_modules, package.json, package-lock.json
-
   const files = fs.readdirSync(obj.tmpdir);
   const skips = ['node_modules', 'package.json', 'package-lock.json', '.git'];
+  let promises = [];
 
   for (const file of files) {
     if (skips.includes(file)) { continue; }
+
     const src = path.join(obj.tmpdir, file);
     const dest = path.join(obj.root, file);
-    fs.copySync(src, dest); 
+
+    promises.push(new Promise((resolve, reject) => {
+      fs.copy(src, dest, err => {
+        if (err) {
+          reject(err);
+        }
+        resolve();
+      });
+    }));
   }
 
-  obj.cleanup();
+  return Promise.all(promises).then(() => obj);
 
+}).then((obj) => {
+  // Perform cleanup
+  console.log(chalk.green('Template applied successfullly!'));
+  obj.cleanup();
 }).catch(reason => {
   console.log();
   console.log('Aborting installation.');
@@ -151,16 +163,16 @@ function createApp(name) {
     const command = 'create-react-app';
     const args = [name];
 
-    // const child = spawn(command, args, { stdio: 'inherit' });
-    // child.on('close', code => {
-    //   if (code !== 0) {
-    //     reject({
-    //       command: `${command} ${args.join(' ')}`,
-    //     });
-    //     return;
-    //   }
-       resolve();
-    // });
+    const child = spawn(command, args, { stdio: 'inherit' });
+    child.on('close', code => {
+      if (code !== 0) {
+        reject({
+          command: `${command} ${args.join(' ')}`,
+        });
+        return;
+      }
+      resolve();
+    });
   });
 }
 
@@ -214,47 +226,18 @@ function install(dependencies) {
       })
     );
     
-    // const child = spawn('npm', args, { stdio: 'inherit' });
-    // child.on('close', code => {
-    //   if (code !== 0) {
-    //     reject({
-    //       command: `${command} ${args.join(' ')}`,
-    //     });
-    //     return;
-    //   }
+    const child = spawn('npm', args, { stdio: 'inherit' });
+    child.on('close', code => {
+      if (code !== 0) {
+        reject({
+          command: `${command} ${args.join(' ')}`,
+        });
+        return;
+      }
        resolve();
-    // });
+    });
   });
 }
 
-function mergeDirs (src, dest) {
 
-  const files = fs.readdirSync(src)
-
-  files.forEach((file) => {
-    const srcFile = '' + src + '/' + file
-    const destFile = '' + dest + '/' + file
-    const stats = fs.lstatSync(srcFile)
-
-    if (stats.isDirectory()) {
-      mergeDirs(srcFile, destFile, conflictResolver)
-    } else {
-      // console.log({srcFile, destFile}, 'conflict?', fs.existsSync(destFile))
-      if (!fs.existsSync(destFile)) {
-        copyFile(destFile, srcFile)
-      } else {
-        switch (conflictResolver) {
-          case conflictResolvers.ask:
-            fileAsk(srcFile, destFile)
-            break
-          case conflictResolvers.overwrite:
-            copyFile(destFile, srcFile)
-            break
-          case conflictResolvers.skip:
-            console.log(`${destFile} exists, skipping...`)
-        }
-      }
-    }
-  })
-}
 

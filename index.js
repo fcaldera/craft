@@ -88,6 +88,42 @@ createApp(projectName)
     });
   })
   .then(obj => {
+    // Merge folders and files
+    console.log();
+    console.log('Copying files...');
+
+    const root = path.resolve(projectName);
+    
+    const files = fs.readdirSync(obj.tmpdir);
+    const skips = ['node_modules', 'package.json', 'package-lock.json', '.git'];
+    let promises = [];
+
+    for (const file of files) {
+      if (skips.includes(file)) {
+        continue;
+      }
+
+      const src = path.join(obj.tmpdir, file);
+      const dest = path.join(root, file);
+
+      promises.push(
+        new Promise((resolve, reject) => {
+          fs.copy(src, dest, err => {
+            if (err) {
+              console.log(chalk.red(`- ${file}`));
+            } else {
+              console.log(`+ ${file}`);
+            }
+            
+            resolve();
+          });
+        })
+      );
+    }
+
+    return Promise.all(promises).then(() => obj);
+  })
+  .then(obj => {
     console.log();
     console.log('Installing template packages...');
 
@@ -143,40 +179,6 @@ createApp(projectName)
 
       return Object.assign({}, obj, { root });
     });
-  })
-  .then(obj => {
-    // Merge folders and files
-    console.log();
-    console.log('Copying files...');
-
-    const files = fs.readdirSync(obj.tmpdir);
-    const skips = ['node_modules', 'package.json', 'package-lock.json', '.git'];
-    let promises = [];
-
-    for (const file of files) {
-      if (skips.includes(file)) {
-        continue;
-      }
-
-      const src = path.join(obj.tmpdir, file);
-      const dest = path.join(obj.root, file);
-
-      promises.push(
-        new Promise((resolve, reject) => {
-          fs.copy(src, dest, err => {
-            if (err) {
-              console.log(chalk.red(`- ${file}`));
-            } else {
-              console.log(`+ ${file}`);
-            }
-            
-            resolve();
-          });
-        })
-      );
-    }
-
-    return Promise.all(promises).then(() => obj);
   })
   .then(obj => {
     // Perform cleanup

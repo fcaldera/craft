@@ -1,6 +1,6 @@
 {
   "name": "@isfco/craft",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A command line tool for creating React apps from template.",
   "main": "index.js",
   "repository": {

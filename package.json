@@ -23,10 +23,10 @@
   },
   "homepage": "https://github.com/fcaldera/craft#readme",
   "dependencies": {
-    "chalk": "^2.1.0",
-    "commander": "^2.11.0",
-    "cross-spawn": "^5.1.0",
-    "fs-extra": "^4.0.1",
+    "chalk": "^2.4.2",
+    "commander": "^2.19.0",
+    "cross-spawn": "^6.0.5",
+    "fs-extra": "^7.0.1",
     "tmp": "0.0.33"
   }
 }

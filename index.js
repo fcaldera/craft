@@ -53,8 +53,10 @@ if (
   process.exit(1);
 }
 
-if (!isCRAInstalled()) {
-  console.error('No create-react-app instalation has been detected.');
+const npx = isNPXAvailable();
+
+if (!npx && !isCRAInstalled()) {
+  console.error('No create-react-app installation has been detected.');
   console.log('Please install create-react-app to continue.');
   console.log();
   console.log(
@@ -63,7 +65,7 @@ if (!isCRAInstalled()) {
   process.exit(1);
 }
 
-createApp(projectName)
+createApp(projectName, npx)
   .then(() => {
     console.log();
     console.log(chalk.magenta('Applying custom template...'));
@@ -198,10 +200,10 @@ createApp(projectName)
     console.log();
   });
 
-function createApp(name) {
+function createApp(name, npx) {
   return new Promise((resolve, reject) => {
-    const command = 'create-react-app';
-    const args = [name];
+    const command = npx ? 'npx' : 'create-react-app';
+    const args = npx ? ['create-react-app', name] : [name];
 
     const child = spawn(command, args, { stdio: 'inherit' });
     child.on('close', code => {
@@ -214,6 +216,15 @@ function createApp(name) {
       resolve();
     });
   });
+}
+
+function isNPXAvailable() {
+  try {
+    execSync('npx --version', { stdio: 'ignore' });
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function isCRAInstalled() {

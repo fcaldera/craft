@@ -8,6 +8,7 @@ const chalk = require('chalk');
 const spawn = require('cross-spawn');
 const execSync = require('child_process').execSync;
 const tmp = require('tmp');
+const yaml = require('js-yaml');
 
 const packageJson = require('./package.json');
 
@@ -15,7 +16,8 @@ const defaultSpec = {
   node_modules: 'ignore',
   'package.json': 'merge',
   'package-lock.json': 'ignore',
-  'craft.spec': 'ignore',
+  'craft.yaml': 'ignore',
+  'craft.yml': 'ignore',
   '.git': 'ignore',
 };
 
@@ -93,7 +95,7 @@ createApp(projectName, npx)
               command: `${command} ${args.join(' ')}`
             });
           }
-          obj.spec = readSpec(obj.tmpdir);
+          Object.assign(obj, readConfig(obj.tmpdir));
           resolve(obj);
         });
       });
@@ -104,7 +106,7 @@ createApp(projectName, npx)
     console.log();
     console.log('Deleting files...');
 
-    const files = Object.keys(obj.spec).filter(file => obj.spec[file] === "delete");
+    const files = Object.keys(obj.spec).filter(file => obj.spec[file] === 'delete');
     const promises = [];
 
     for (const file of files) {
@@ -133,7 +135,7 @@ createApp(projectName, npx)
 
     const skip = file => {
       const directive = obj.spec[file];
-      return directive && directive !== "replace";
+      return directive && directive !== 'replace';
     };
 
     const prefixLength = obj.tmpdir.length + 1;
@@ -164,7 +166,7 @@ createApp(projectName, npx)
     return Promise.all(promises).then(() => obj);
   })
   .then(obj => {
-    if (obj.spec['package.json'] !== "merge") {
+    if (obj.spec['package.json'] !== 'merge') {
       return obj;
     }
 
@@ -300,35 +302,64 @@ function getTemporaryDirectory() {
   });
 }
 
-function readSpec(templateDir) {
-  const specFile = 'craft.spec'
-  const specPath = path.join(templateDir, specFile);
-  const directives = [ 'ignore', 'delete', 'replace'];
-  const spec = Object.assign({}, defaultSpec);
+function readConfig(templateDir) {
+  const yamlFile = 'craft.yaml';
+  const yamlPath = path.join(templateDir, yamlFile);
+  const ymlFile = 'craft.yml'
+  const ymlPath = path.join(templateDir, ymlFile);
+  let configFile, configPath;
+  let config = {};
 
-  if (fs.existsSync(specPath)) {
-    console.log(`Using template specification from ${specFile}.`);
+  if (fs.existsSync(yamlPath)) {
+    configFile = yamlFile;
+    configPath = yamlPath;
+  } else if (fs.existsSync(ymlPath)) {
+    configFile = ymlFile;
+    configPath = ymlPath;
+  }
+
+  if (configPath) {
+    console.log(`Using craft configuration from ${configFile}.`);
     try {
-      fs.readFileSync(specPath, 'utf8').split(/\r?\n/).forEach(line => {
-        if (line.charAt(0) !== '#') {
-          const match = /^(.*?):[ \t]*(.*)$/.exec(line);
-          if (match) {
-            const [, filePath, directive] = match;
-            if (directives.includes(directive)) {
-              const platformPath = filePath.replace(/\//g, path.sep);
-              spec[platformPath] = directive;
-            } else {
-              const d = chalk.red(directive)
-              console.log(`Invalid directive for file ${filePath}: ${d}.`);
-            }
-          }
-        }
-      });
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      config = normalizeConfig(yaml.safeLoad(configContent, { json: true }));
     } catch (err) {
-      console.log(chalk.red(`Failed to read ${specFile}. Using defaults.`));
+      console.log(chalk.red(`Failed to read ${configFile}. Using defaults.`));
+      console.log(err);
     }
   }
-  return spec;
+  return config;
+}
+
+function normalizeConfig(config = {}) {
+  const directives = [ 'ignore', 'delete', 'replace'];
+  const spec = Object.assign({}, defaultSpec);
+  const add = (directive, value) => {
+    const t = typeof value;
+    if (t === 'string' || t === 'number' || t === 'boolean') {
+        const filePath = value.toString().replace(/\//g, path.sep);
+        spec[filePath] = directive;
+      } else {
+        const dir = chalk.red(directive);
+        console.log(`Invalid value for directive ${dir}: ${value}.`);
+    }
+  }
+
+  if (config.spec) {
+    Object.keys(config.spec).forEach(directive => {
+      if (directives.includes(directive)) {
+        const value = config.spec[directive];
+        if (Array.isArray(value)) {
+          value.forEach(val => add(directive, val));
+        } else {
+          add(directive, value);
+        }
+      } else {
+        console.log(`Invalid directive: ${chalk.red(directive)}.`);
+      }
+    });
+  }
+  return { spec };
 }
 
 function install(dependencies) {

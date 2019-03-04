@@ -8,8 +8,18 @@ const chalk = require('chalk');
 const spawn = require('cross-spawn');
 const execSync = require('child_process').execSync;
 const tmp = require('tmp');
+const yaml = require('js-yaml');
 
 const packageJson = require('./package.json');
+
+const defaultSpec = {
+  node_modules: 'ignore',
+  'package.json': 'merge',
+  'package-lock.json': 'ignore',
+  'craft.yaml': 'ignore',
+  'craft.yml': 'ignore',
+  '.git': 'ignore',
+};
 
 let projectName;
 let projectTemplate;
@@ -53,6 +63,7 @@ if (
   process.exit(1);
 }
 
+const root = path.resolve(projectName);
 const npx = isNPXAvailable();
 
 if (!npx && !isCRAInstalled()) {
@@ -71,7 +82,7 @@ createApp(projectName, npx)
     console.log(chalk.magenta('Applying custom template...'));
     console.log();
 
-    // Clone template to a temp directory
+    // Clone template to a temp directory and read the spec file
     return getTemporaryDirectory().then(obj => {
       return new Promise((resolve, reject) => {
         const command = 'git';
@@ -84,24 +95,55 @@ createApp(projectName, npx)
               command: `${command} ${args.join(' ')}`
             });
           }
+          Object.assign(obj, readConfig(obj.tmpdir));
           resolve(obj);
         });
       });
     });
   })
   .then(obj => {
-    // Merge folders and files
+    // Delete folders and files
+    console.log();
+    console.log('Deleting files...');
+
+    const files = Object.keys(obj.spec).filter(file => obj.spec[file] === 'delete');
+    const promises = [];
+
+    for (const file of files) {
+      const target = path.join(root, file);
+      promises.push(
+        new Promise((resolve, reject) => {
+          fs.remove(target, err => {
+            if (err) {
+              console.log(chalk.red(`! ${file}`));
+            } else {
+              console.log(`- ${file}`);
+            }
+            resolve();
+          });
+        })
+      );
+    }
+    return Promise.all(promises).then(() => obj);
+  })
+  .then(obj => {
+    // Copy folders and files
     console.log();
     console.log('Copying files...');
 
-    const root = path.resolve(projectName);
-    
     const files = fs.readdirSync(obj.tmpdir);
-    const skips = ['node_modules', 'package.json', 'package-lock.json', '.git'];
-    let promises = [];
+
+    const skip = file => {
+      const directive = obj.spec[file];
+      return directive && directive !== 'replace';
+    };
+
+    const prefixLength = obj.tmpdir.length + 1;
+    const filter = (src, dest) => !skip(src.substring(prefixLength));
+    const promises = [];
 
     for (const file of files) {
-      if (skips.includes(file)) {
+      if (skip(file)) {
         continue;
       }
 
@@ -110,26 +152,27 @@ createApp(projectName, npx)
 
       promises.push(
         new Promise((resolve, reject) => {
-          fs.copy(src, dest, err => {
+          fs.copy(src, dest, { filter }, err => {
             if (err) {
-              console.log(chalk.red(`- ${file}`));
+              console.log(chalk.red(`! ${file}`));
             } else {
               console.log(`+ ${file}`);
             }
-            
             resolve();
           });
         })
       );
     }
-
     return Promise.all(promises).then(() => obj);
   })
   .then(obj => {
+    if (obj.spec['package.json'] !== 'merge') {
+      return obj;
+    }
+
     console.log();
     console.log('Installing template packages...');
 
-    const root = path.resolve(projectName);
     const originalDirectory = process.cwd();
     process.chdir(root);
 
@@ -178,14 +221,13 @@ createApp(projectName, npx)
         path.join(root, 'package.json'),
         JSON.stringify(packageJson, null, 2)
       );
-
-      return Object.assign({}, obj, { root });
+      return obj;
     });
   })
   .then(obj => {
     // Perform cleanup
     console.log();
-    console.log(chalk.green('Template applied successfullly!'));
+    console.log(chalk.green('Template applied successfully!'));
     obj.cleanup();
   })
   .catch(reason => {
@@ -258,6 +300,66 @@ function getTemporaryDirectory() {
       }
     });
   });
+}
+
+function readConfig(templateDir) {
+  const yamlFile = 'craft.yaml';
+  const yamlPath = path.join(templateDir, yamlFile);
+  const ymlFile = 'craft.yml'
+  const ymlPath = path.join(templateDir, ymlFile);
+  let configFile, configPath;
+  let config = {};
+
+  if (fs.existsSync(yamlPath)) {
+    configFile = yamlFile;
+    configPath = yamlPath;
+  } else if (fs.existsSync(ymlPath)) {
+    configFile = ymlFile;
+    configPath = ymlPath;
+  }
+
+  if (configPath) {
+    console.log(`Using craft configuration from ${configFile}.`);
+    try {
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      config = normalizeConfig(yaml.safeLoad(configContent, { json: true }));
+    } catch (err) {
+      console.log(chalk.red(`Failed to read ${configFile}. Using defaults.`));
+      console.log(err);
+    }
+  }
+  return config;
+}
+
+function normalizeConfig(config = {}) {
+  const directives = [ 'ignore', 'delete', 'replace'];
+  const spec = Object.assign({}, defaultSpec);
+  const add = (directive, value) => {
+    const t = typeof value;
+    if (t === 'string' || t === 'number' || t === 'boolean') {
+        const filePath = value.toString().replace(/\//g, path.sep);
+        spec[filePath] = directive;
+      } else {
+        const dir = chalk.red(directive);
+        console.log(`Invalid value for directive ${dir}: ${value}.`);
+    }
+  }
+
+  if (config.spec) {
+    Object.keys(config.spec).forEach(directive => {
+      if (directives.includes(directive)) {
+        const value = config.spec[directive];
+        if (Array.isArray(value)) {
+          value.forEach(val => add(directive, val));
+        } else {
+          add(directive, value);
+        }
+      } else {
+        console.log(`Invalid directive: ${chalk.red(directive)}.`);
+      }
+    });
+  }
+  return { spec };
 }
 
 function install(dependencies) {

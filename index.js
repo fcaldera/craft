@@ -181,25 +181,25 @@ createApp(projectName, npx)
     let templatePackageJson;
 
     try {
-      templatePackageJson = require(templatePackageJsonPath);
+      templatePackageJson = fs.readJsonSync(templatePackageJsonPath);
     } catch (error) {
       return Promise.resolve(obj);
     }
 
-    let templateDependencies = templatePackageJson.dependencies || {};
+    const templateDependencies = templatePackageJson.dependencies || {};
 
-    // Does not include already installed dependencies
-    // TODO: installed dependencies should be taken from package.json of just
-    // created app
-    const installedDependencies = ['react', 'react-dom', 'react-scripts'];
-
-    installedDependencies.forEach(key => {
+    // Exclude dependencies that were already installed when the app was created
+    const appPackageJsonPath = path.join(root, 'package.json');
+    let appPackageJson = fs.readJsonSync(appPackageJsonPath);
+    Object.keys(appPackageJson.dependencies || {}).forEach(key => {
       delete templateDependencies[key];
     });
 
     // Install additional dependencies
     return install(templateDependencies).then(() => {
-      const appPackageJson = require(path.join(root, 'package.json'));
+
+      // Re-read the app package.json to get updated dependencies
+      appPackageJson = fs.readJsonSync(appPackageJsonPath)
 
       // Dependencies are already available in app package.json so we can safely
       // replace them. However we cannot replace template scripts with app

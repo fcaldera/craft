@@ -210,11 +210,17 @@ createApp(projectName, npx)
         templatePackageJson.scripts
       );
 
+      // As the default ESLint configuration is fully captured in the sharable
+      // eslint-config-react-app package, we don't expect any changes in the
+      // app package.json. So, we allow any customizations in the template to
+      // take precendence.
+      const eslintConfig = templatePackageJson.eslintConfig || appPackageJson.eslintConfig;
+
       const packageJson = Object.assign(
         {},
         templatePackageJson,
         appPackageJson,
-        { scripts }
+        { scripts, eslintConfig }
       );
 
       fs.writeFileSync(
